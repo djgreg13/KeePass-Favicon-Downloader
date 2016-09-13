@@ -370,8 +370,39 @@ namespace KeePassFaviconDownloader
                     // A cookie container is needed for some sites to work
                     hw.PreRequest += PreRequest_EventHandler;
 
+                    ProxyServerType proxyType = KeePass.Program.Config.Integration.ProxyType;
+                    ProxyAuthType proxyAuthType = KeePass.Program.Config.Integration.ProxyAuthType;
+
                     // HtmlWeb.Load will follow 302 and 302 redirects to alternate URIs
-                    hdoc = hw.Load(nextUri.AbsoluteUri);
+                    ICredentials creds = null;
+                    if (proxyAuthType == ProxyAuthType.Manual)
+                    {
+                        creds = new NetworkCredential(KeePass.Program.Config.Integration.ProxyUserName, KeePass.Program.Config.Integration.ProxyPassword);
+                    }
+                    else if (proxyAuthType == ProxyAuthType.Default)
+                    {
+                        creds = CredentialCache.DefaultCredentials;
+                    }
+
+                    if (proxyType == ProxyServerType.Manual)
+                    {
+                        WebProxy proxy = new WebProxy();
+
+                        proxy.Address = new Uri(String.Format("http://{0}:{1}/", KeePass.Program.Config.Integration.ProxyAddress, KeePass.Program.Config.Integration.ProxyPort));
+                        if(creds != null)
+                            proxy.Credentials = creds;
+                        hdoc = hw.Load(nextUri.AbsoluteUri, "GET", proxy, null);
+                    }
+                    else if (proxyType == ProxyServerType.System)
+                    {
+                        WebRequest.DefaultWebProxy.Credentials = creds;
+                        hdoc = hw.Load(nextUri.AbsoluteUri);
+                    }
+                    else
+                    {
+                        WebProxy proxy = new WebProxy();
+                        hdoc = hw.Load(nextUri.AbsoluteUri, "GET", proxy, null);
+                    }
                     responseURI = hw.ResponseUri;
 
                     // Old school meta refreshes need to parsed
@@ -452,6 +483,45 @@ namespace KeePassFaviconDownloader
                 ((HttpWebRequest)webreq).Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
                 ((HttpWebRequest)webreq).Headers.Add(HttpRequestHeader.AcceptLanguage, "*");
                 webreq.Timeout = 10000; // don't think it's expecting too much for a few KB to be delivered inside 10 seconds.
+
+
+                //Gestion du proxy
+                ProxyServerType proxyType = KeePass.Program.Config.Integration.ProxyType;
+                ProxyAuthType proxyAuthType = KeePass.Program.Config.Integration.ProxyAuthType;
+
+                // HtmlWeb.Load will follow 302 and 302 redirects to alternate URIs
+                ICredentials creds = null;
+                if (proxyAuthType == ProxyAuthType.Manual)
+                {
+                    creds = new NetworkCredential(KeePass.Program.Config.Integration.ProxyUserName, KeePass.Program.Config.Integration.ProxyPassword);
+                }
+                else if (proxyAuthType == ProxyAuthType.Default)
+                {
+                    creds = CredentialCache.DefaultCredentials;
+                }
+
+                if (proxyType == ProxyServerType.Manual)
+                {
+                    WebProxy proxy = new WebProxy();
+
+                    proxy.Address = new Uri(String.Format("http://{0}:{1}/", KeePass.Program.Config.Integration.ProxyAddress, KeePass.Program.Config.Integration.ProxyPort));
+                    if (creds != null)
+                        proxy.Credentials = creds;
+                    webreq.Proxy = proxy;
+                }
+                else if (proxyType == ProxyServerType.System)
+                {
+                    IWebProxy proxy = WebRequest.DefaultWebProxy;
+                    if (creds != null)
+                        proxy.Credentials = creds;
+                    webreq.Proxy = proxy;
+                }
+                else
+                {
+                    WebProxy proxy = new WebProxy();
+                    webreq.Proxy = proxy;
+                }
+
 
                 WebResponse response = webreq.GetResponse();
                 
